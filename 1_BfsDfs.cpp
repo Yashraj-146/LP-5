@@ -166,3 +166,7 @@ int main() {
 
     return 0;
 }
+
+
+// g++ -fopenmp bfsDfs.cpp -o output
+// ./output
