@@ -3,92 +3,81 @@
 #include <queue>
 #include <stack>
 #include <omp.h>
+
 using namespace std;
 
-class Graph {
-    int V;
+class Graph
+{
+private:
+    int numVertices;
     vector<vector<int>> adj;
 
 public:
-    Graph(int v) {
-        V = v;
-        adj.resize(V);
+    Graph(int vertices)
+    {
+        this->numVertices = vertices;
+        adj.resize(vertices);
     }
 
-    void addEdge(int u, int v) {
+    void addEdge(int u, int v)
+    {
         adj[u].push_back(v);
         adj[v].push_back(u);
     }
 
-    // -------- Sequential BFS --------
-    void bfs_seq(int start) {
-        vector<bool> visited(V, false);
+    /* -------- SEQUENTIAL BFS -------- */
+    void sequentialBFS(int start)
+    {
+        vector<bool> visited(numVertices, false);
         queue<int> q;
 
         visited[start] = true;
         q.push(start);
 
-        while (!q.empty()) {
-            int node = q.front(); q.pop();
-            cout << node << " ";
+        while (!q.empty())
+        {
+            int node = q.front();
+            q.pop();
+            //cout<<node<<" "; //for printing the output
 
-            for (int nb : adj[node]) {
-                if (!visited[nb]) {
-                    visited[nb] = true;
-                    q.push(nb);
+            for (int neighbor : adj[node])
+            {
+                if (!visited[neighbor])
+                {
+                    visited[neighbor] = true;
+                    q.push(neighbor);
                 }
             }
         }
     }
 
-    // -------- Sequential DFS --------
-    void dfs_seq(int start) {
-        vector<bool> visited(V, false);
-        stack<int> st;
-
-        st.push(start);
-        visited[start] = true;
-
-        while (!st.empty()) {
-            int node = st.top(); st.pop();
-            cout << node << " ";
-
-            for (auto it = adj[node].rbegin(); it != adj[node].rend(); it++) {
-                if (!visited[*it]) {
-                    visited[*it] = true;
-                    st.push(*it);
-                }
-            }
-        }
-    }
-
-    // -------- Parallel BFS --------
-    void bfs_par(int start) {
-        vector<bool> visited(V, false);
+    /* -------- PARALLEL BFS -------- */
+    void parallelBFS(int start)
+    {
+        vector<bool> visited(numVertices, false);
         queue<int> q;
 
         visited[start] = true;
         q.push(start);
 
-        while (!q.empty()) {
-            int size = q.size();
-            vector<int> level;
-
-            for (int i = 0; i < size; i++) {
-                int node = q.front(); q.pop();
-                cout << node << " ";
-                level.push_back(node);
-            }
-
+        while (!q.empty())
+        {
+            int node = q.front();
+            q.pop();
+            //cout<<node<<" "; //for printing the output
 #pragma omp parallel for
-            for (int i = 0; i < level.size(); i++) {
-                int node = level[i];
-                for (int nb : adj[node]) {
+            for (int i = 0; i < adj[node].size(); i++)
+            {
+                int neighbor = adj[node][i];
+
+                if (!visited[neighbor])
+                {
 #pragma omp critical
                     {
-                        if (!visited[nb]) {
-                            visited[nb] = true;
-                            q.push(nb);
+                        if (!visited[neighbor])
+                        {
+                            visited[neighbor] = true;
+                            q.push(neighbor);
                         }
                     }
                 }
@@ -96,77 +85,101 @@ public:
         }
     }
 
-    // -------- Parallel DFS (task-based) --------
-    void dfs_task(int node, vector<bool>& visited) {
-    #pragma omp critical
+    /* -------- SEQUENTIAL DFS -------- */
+    void sequentialDFS(int start)
+    {
+        vector<bool> visited(numVertices, false);
+        stack<int> st;
+        st.push(start);
+        visited[start] = true;
+        while (!st.empty())
         {
-            if (visited[node]) return;
-            visited[node] = true;
-            cout << node << " ";
-        }
-
-        for (int nb : adj[node]) {
-            if (!visited[nb]) {
-    #pragma omp task
-                dfs_task(nb, visited);
+            int node = st.top();
+            st.pop();
+            //cout<<node<<" "; //for printing the output
+            for (auto neighbour : adj[node])
+            {
+                if (!visited[neighbour])
+                {
+                    visited[neighbour] = true;
+                    st.push(neighbour);
+                }
             }
         }
-
-    #pragma omp taskwait
     }
+    /* -------- PARALLEL DFS -------- */
+    void parallelDFS(int start)
+    {
+        vector<bool> visited(numVertices, false);
+        stack<int> st;
+        st.push(start);
+        visited[start] = true;
 
-    void dfs_par(int start) {
-        vector<bool> visited(V, false);
-
-#pragma omp parallel
+        while (!st.empty())
         {
-#pragma omp single
-            dfs_task(start, visited);
+            int node = st.top();
+            st.pop();
+            //cout<<node<<" "; //for printing the output
+#pragma omp parallel for
+            for (int i = 0; i < adj[node].size(); i++)
+            {
+                int neighbour = adj[node][i];
+                if (!visited[neighbour])
+                {
+#pragma omp critical
+                    {
+                        if (!visited[neighbour])
+                        {
+                            visited[neighbour] = true;
+                            st.push(neighbour);
+                        }
+                    }
+                }
+            }
         }
     }
 };
 
-int main() {
-    cout << "Program started\n";
-    Graph g(6);
+/* ---------------- MAIN ---------------- */
+int main()
+{
+    int numVertices = 30000;
+    int numEdges = 350000;
 
-    g.addEdge(0,1);
-    g.addEdge(0,2);
-    g.addEdge(1,3);
-    g.addEdge(1,4);
-    g.addEdge(2,4);
-    g.addEdge(3,5);
-    g.addEdge(4,5);
+    cout << "Auto-generating graph...\n";
 
-    double t1, t2;
+    Graph g(numVertices);
 
-    cout << "Sequential BFS: ";
-    t1 = omp_get_wtime();
-    g.bfs_seq(0);
-    t2 = omp_get_wtime();
-    cout << "\nTime: " << (t2 - t1)*1000 << " ms\n\n";
+    // Generate random edges
+    for (int i = 0; i < numEdges; i++)
+    {
+        int u = rand() % numVertices;
+        int v = rand() % numVertices;
+        if (u != v)
+            g.addEdge(u, v);
+    }
 
-    cout << "Parallel BFS: ";
-    t1 = omp_get_wtime();
-    g.bfs_par(0);
-    t2 = omp_get_wtime();
-    cout << "\nTime: " << (t2 - t1)*1000 << " ms\n\n";
+    int startVertex = 0;
 
-    cout << "Sequential DFS: ";
-    t1 = omp_get_wtime();
-    g.dfs_seq(0);
-    t2 = omp_get_wtime();
-    cout << "\nTime: " << (t2 - t1)*1000 << " ms\n\n";
+    double start = omp_get_wtime();
+    g.sequentialBFS(startVertex);
+    double end = omp_get_wtime();
+    cout << "Sequential BFS: " << (end - start) * 1000 << " ms\n";
 
-    cout << "Parallel DFS: ";
-    t1 = omp_get_wtime();
-    g.dfs_par(0);
-    t2 = omp_get_wtime();
-    cout << "\nTime: " << (t2 - t1)*1000 << " ms\n";
+    start = omp_get_wtime();
+    g.parallelBFS(startVertex);
+    end = omp_get_wtime();
+    cout << "Parallel BFS: " << (end - start) * 1000 << " ms\n";
+
+    start = omp_get_wtime();
+    g.sequentialDFS(startVertex);
+    end = omp_get_wtime();
+    cout << "Sequential DFS: " << (end - start) * 1000 << " ms\n";
+
+    start = omp_get_wtime();
+    g.parallelDFS(startVertex);
+    end = omp_get_wtime();
+    cout << "Parallel DFS: " << (end - start) * 1000 << " ms\n";
 
     return 0;
 }
-
-
-// g++ -fopenmp bfsDfs.cpp -o output
-// ./output
