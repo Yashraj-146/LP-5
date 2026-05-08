@@ -1,70 +1,153 @@
 #include<iostream>
-#include<vector>
-#include<math.h>
-#include<limits>
+#include<climits>
 #include<algorithm>
-#include<omp.h>
+#include<vector>
+#include<ctime>
+#include <omp.h>
 
 using namespace std;
 
-template <typename E>
-class ParallelReduction {
-    vector<E> arr;
+/* ---------- SEQUENTIAL ---------- */
+int seq_min(int arr[], int n) {
+    int min_val = INT_MAX;
 
-public:
-    ParallelReduction(const vector<E>& inputArr) : arr(inputArr) {}
+    for(int i = 0; i < n; i++)
+        if(arr[i] < min_val)
+            min_val = arr[i];
 
-    E sum() {
-        E sum = 0;
-        #pragma omp parallel for reduction(+:sum)
-        for(size_t i = 0; i < arr.size(); i++) {
-            sum += arr[i];
-        }
-        return sum;
-    }
+    return min_val;
+}
 
-    E min() {
-        // Initialise minElement to the max possible value of its data type
-        E minElement = numeric_limits<E>::max();
-        #pragma omp parallel for reduction(min: minElement)
-        for(size_t i = 0; i < arr.size(); i++) {
-            minElement = std::min(minElement, arr[i]);
-        }
-        return minElement;
-    }
+int seq_max(int arr[], int n) {
+    int max_val = INT_MIN;
 
-    E max() {
-        // Initialise maxElement to the smallest possible value of its data type
-        E maxElement = numeric_limits<E>::min();
-        #pragma omp parallel for reduction(max: maxElement)
-        for(size_t i = 0; i < arr.size(); i++) {
-            maxElement = std::max(maxElement, arr[i]);
-        }
-        return maxElement;
-    }
+    for(int i = 0; i < n; i++)
+        if(arr[i] > max_val)
+            max_val = arr[i];
 
-    double mean() {
-        E sumValue = sum();
-        return static_cast<double>(sumValue) / arr.size(); // Cast sum to double for accurate mean calculation
-    }
-};
+    return max_val;
+}
 
+int seq_sum(int arr[], int n) {
+    int sum = 0;
+
+    for(int i = 0; i < n; i++)
+        sum += arr[i];
+
+    return sum;
+}
+
+double seq_avg(int arr[], int n) {
+    int sum = 0;
+
+    for(int i = 0; i < n; i++)
+        sum += arr[i];
+
+    return (double)sum / n;
+}
+
+/* ---------- PARALLEL ---------- */
+
+int par_min(int arr[], int n) {
+    int min_val = INT_MAX;
+
+    #pragma omp parallel for reduction(min:min_val)
+    for(int i = 0; i < n; i++)
+        if(arr[i] < min_val)
+            min_val = arr[i];
+
+    return min_val;
+}
+
+int par_max(int arr[], int n) {
+    int max_val = INT_MIN;
+
+    #pragma omp parallel for reduction(max:max_val)
+    for(int i = 0; i < n; i++)
+        if(arr[i] > max_val)
+            max_val = arr[i];
+
+    return max_val;
+}
+
+int par_sum(int arr[], int n) {
+    int sum = 0;
+
+    #pragma omp parallel for reduction(+:sum)
+    for(int i = 0; i < n; i++)
+        sum += arr[i];
+
+    return sum;
+}
+
+double par_avg(int arr[], int n) {
+    int sum = 0;
+
+    #pragma omp parallel for reduction(+:sum)
+    for(int i = 0; i < n; i++)
+        sum += arr[i];
+
+    return (double)sum / n;
+}
+
+/* ---------- MAIN ---------- */
 int main() {
-    vector<int> arr = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+    int n;
 
-    ParallelReduction<int> pr(arr);
+    cout << "Enter size: ";
+    cin >> n;
 
-    int sumValue = pr.sum();
-    cout << "Sum: " << sumValue << '\n';
+    int *arr = new int[n];
 
-    int maxValue = pr.max();
-    cout << "Max: " << maxValue << '\n';
+    for(int i = 0; i < n; i++)
+        arr[i] = rand() % 1000;
 
-    int minValue = pr.min();
-    cout << "Min: " << minValue << '\n';
+    double t1, t2;
 
-    double meanValue = pr.mean();
-    cout << "Mean: " << meanValue << '\n';
+    /* ---------- Sequential ---------- */
+    t1 = omp_get_wtime();
+    int smin = seq_min(arr, n);
+    t2 = omp_get_wtime();
+    cout << "Sequential Min: " << smin << " | Time: " << t2 - t1 << "s\n";
+
+    t1 = omp_get_wtime();
+    int smax = seq_max(arr, n);
+    t2 = omp_get_wtime();
+    cout << "Sequential Max: " << smax << " | Time: " << t2 - t1 << "s\n";
+
+    t1 = omp_get_wtime();
+    int ssum = seq_sum(arr, n);
+    t2 = omp_get_wtime();
+    cout << "Sequential Sum: " << ssum << " | Time: " << t2 - t1 << "s\n";
+
+    t1 = omp_get_wtime();
+    double savg = seq_avg(arr, n);
+    t2 = omp_get_wtime();
+    cout << "Sequential Avg: " << savg << " | Time: " << t2 - t1 << "s\n";
+
+
+    /* ---------- Parallel ---------- */
+    t1 = omp_get_wtime();
+    int pmin = par_min(arr, n);
+    t2 = omp_get_wtime();
+    cout << "Parallel Min: " << pmin << " | Time: " << t2 - t1 << "s\n";
+
+    t1 = omp_get_wtime();
+    int pmax = par_max(arr, n);
+    t2 = omp_get_wtime();
+    cout << "Parallel Max: " << pmax << " | Time: " << t2 - t1 << "s\n";
+
+    t1 = omp_get_wtime();
+    int psum = par_sum(arr, n);
+    t2 = omp_get_wtime();
+    cout << "Parallel Sum: " << psum << " | Time: " << t2 - t1 << "s\n";
+
+    t1 = omp_get_wtime();
+    double pavg = par_avg(arr, n);
+    t2 = omp_get_wtime();
+    cout << "Parallel Avg: " << pavg << " | Time: " << t2 - t1 << "s\n";
+
+    delete[] arr;
 
     return 0;
 }
