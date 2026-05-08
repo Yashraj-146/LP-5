@@ -120,3 +120,7 @@ int main() {
 
     return 0;
 }
+
+
+// g++ -fopenmp sort.cpp -o sort
+// ./sort
