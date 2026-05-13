@@ -105,7 +105,7 @@ int main() {
 !nvcc vector_add.cu -o vector_add
 !./vector_add
 
-//--------------------------MatMul------------------//
+//--------------------------MatMul--------------------------//
 
 %%writefile matrix_mul.cu
 
