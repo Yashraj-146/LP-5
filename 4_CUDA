@@ -1,0 +1,237 @@
+!nvidia-smi
+
+!apt-get install -y nvidia-cuda-toolkit
+
+//----------------------VectorAddition------------------------//
+
+%%writefile vector_add.cu
+
+#include <iostream>
+#include <chrono>
+using namespace std;
+using namespace chrono;
+
+// CUDA Kernel
+__global__ void add(int *a, int *b, int *c, int n) {
+
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (i < n) {
+        c[i] = a[i] + b[i];
+    }
+}
+
+int main() {
+
+    int n;
+
+    cout << "Enter size of vectors: ";
+    cin >> n;
+
+    int *a = new int[n];
+    int *b = new int[n];
+    int *c = new int[n];
+
+    cout << "Enter elements of Vector A:\n";
+    for (int i = 0; i < n; i++)
+        cin >> a[i];
+
+    cout << "Enter elements of Vector B:\n";
+    for (int i = 0; i < n; i++)
+        cin >> b[i];
+
+    // ---------------- SEQUENTIAL ADDITION ----------------
+
+    auto start = high_resolution_clock::now();
+
+    for (int i = 0; i < n; i++) {
+        c[i] = a[i] + b[i];
+    }
+
+    auto stop = high_resolution_clock::now();
+
+    auto duration = duration_cast<microseconds>(stop - start);
+
+    cout << "\nSequential Time: "
+         << duration.count() << " microseconds\n";
+
+    // ---------------- CUDA PART ----------------
+
+    int *d_a, *d_b, *d_c;
+
+    cudaMalloc(&d_a, n * sizeof(int));
+    cudaMalloc(&d_b, n * sizeof(int));
+    cudaMalloc(&d_c, n * sizeof(int));
+
+    cudaMemcpy(d_a, a, n * sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_b, b, n * sizeof(int), cudaMemcpyHostToDevice);
+
+    int threads = 256;
+    int blocks = (n + threads - 1) / threads;
+
+    start = high_resolution_clock::now();
+
+    add<<<blocks, threads>>>(d_a, d_b, d_c, n);
+
+    cudaDeviceSynchronize();
+
+    stop = high_resolution_clock::now();
+
+    duration = duration_cast<microseconds>(stop - start);
+
+    cout << "Parallel CUDA Time: "
+         << duration.count() << " microseconds\n";
+
+    cudaMemcpy(c, d_c, n * sizeof(int), cudaMemcpyDeviceToHost);
+
+    cout << "\nResult Vector: ";
+
+    for (int i = 0; i < n; i++)
+        cout << c[i] << " ";
+
+    cout << endl;
+
+    cudaFree(d_a);
+    cudaFree(d_b);
+    cudaFree(d_c);
+
+    delete[] a;
+    delete[] b;
+    delete[] c;
+
+    return 0;
+}
+
+!nvcc vector_add.cu -o vector_add
+!./vector_add
+
+//--------------------------MatMul------------------//
+
+%%writefile matrix_mul.cu
+
+#include <iostream>
+#include <chrono>
+
+using namespace std;
+using namespace chrono;
+
+// CUDA Kernel
+__global__ void multiply(int *A, int *B, int *C, int N) {
+
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (row < N && col < N) {
+
+        int sum = 0;
+
+        for (int k = 0; k < N; k++) {
+            sum += A[row * N + k] * B[k * N + col];
+        }
+
+        C[row * N + col] = sum;
+    }
+}
+
+int main() {
+
+    int N;
+
+    cout << "Enter size N for NxN matrices: ";
+    cin >> N;
+
+    int *A = new int[N * N];
+    int *B = new int[N * N];
+    int *C = new int[N * N];
+
+    cout << "Enter elements of Matrix A:\n";
+
+    for (int i = 0; i < N * N; i++)
+        cin >> A[i];
+
+    cout << "Enter elements of Matrix B:\n";
+
+    for (int i = 0; i < N * N; i++)
+        cin >> B[i];
+
+    // ---------------- SEQUENTIAL MULTIPLICATION ----------------
+
+    auto start = high_resolution_clock::now();
+
+    for (int i = 0; i < N; i++) {
+
+        for (int j = 0; j < N; j++) {
+
+            int sum = 0;
+
+            for (int k = 0; k < N; k++) {
+                sum += A[i * N + k] * B[k * N + j];
+            }
+
+            C[i * N + j] = sum;
+        }
+    }
+
+    auto stop = high_resolution_clock::now();
+
+    auto duration = duration_cast<microseconds>(stop - start);
+
+    cout << "\nSequential Time: "
+         << duration.count() << " microseconds\n";
+
+    // ---------------- CUDA PART ----------------
+
+    int *d_A, *d_B, *d_C;
+
+    size_t size = N * N * sizeof(int);
+
+    cudaMalloc(&d_A, size);
+    cudaMalloc(&d_B, size);
+    cudaMalloc(&d_C, size);
+
+    cudaMemcpy(d_A, A, size, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_B, B, size, cudaMemcpyHostToDevice);
+
+    dim3 threads(16, 16);
+    dim3 blocks((N + 15) / 16, (N + 15) / 16);
+
+    start = high_resolution_clock::now();
+
+    multiply<<<blocks, threads>>>(d_A, d_B, d_C, N);
+
+    cudaDeviceSynchronize();
+
+    stop = high_resolution_clock::now();
+
+    duration = duration_cast<microseconds>(stop - start);
+
+    cout << "Parallel CUDA Time: "
+         << duration.count() << " microseconds\n";
+
+    cudaMemcpy(C, d_C, size, cudaMemcpyDeviceToHost);
+
+    cout << "\nResult Matrix:\n";
+
+    for (int i = 0; i < N; i++) {
+
+        for (int j = 0; j < N; j++) {
+            cout << C[i * N + j] << " ";
+        }
+
+        cout << endl;
+    }
+
+    cudaFree(d_A);
+    cudaFree(d_B);
+    cudaFree(d_C);
+
+    delete[] A;
+    delete[] B;
+    delete[] C;
+
+    return 0;
+}
+
+//Compile commands
+!nvcc matrix_mul.cu -o matrix_mul
+!./matrix_mul
